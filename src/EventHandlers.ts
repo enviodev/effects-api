@@ -15,7 +15,7 @@ const ERC20_ABI = parseAbi(["function decimals() view returns (uint8)"]);
 // Effect to fetch token metadata (decimals)
 const fetchTokenDetails = createEffect(
   {
-    name: "fetchTokenDetails", // Name used internally for HyperIndex effect tracking
+    name: "fetchTokenDetails", // Name used internally for the effect
     input: {
       token: S.string, // Input: token address as string
     },
@@ -66,6 +66,6 @@ UniswapV3Factory.PoolCreated.handler(async ({ event, context }) => {
     pool: event.params.pool, // Pool address
   };
 
-  // Store entity in HyperIndex DB
+  // Store entity
   context.UniswapV3Factory_PoolCreated.set(entity);
 });
