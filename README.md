@@ -11,15 +11,16 @@ The following example extends the **factory pattern** example to fetch the **dec
 
 ## Create Effect
 
-To create an effect in your handler, use the `experimental_createEffect` function from the `envio` package.
+To create an effect in your handler, use the `createEffect` function from the `envio` package.
 This function takes **two arguments**: effect options and a handler function.
 
 Effect options:
 
-* `name`: used for debugging and logging
-* `input`: the input type of the effect
-* `output`: the output type of the effect
-* `cache`: whether to cache the effect result in the database
+- `name`: used for debugging and logging
+- `input`: the input type of the effect
+- `output`: the output type of the effect
+- `cache`: whether to cache the effect result in the database
+- `rateLimit`: limits the execution frequency of this effect, read more [here](https://docs.envio.dev/docs/HyperIndex/effect-api#rate-limit)
 
 ## Using Effect
 
@@ -31,30 +32,41 @@ CONTRACT.EVENT.handler(async ({ event, context }) => {
 });
 ```
 
-## `getTokenDetails` Effect
+## `fetchTokenDetails` Effect
 
 The following effect fetches the **decimal of a token** using an RPC call:
 
 ```ts
-const fetchTokenDetails = experimental_createEffect(
+const fetchTokenDetails = createEffect(
   {
-    name: "fetchTokenDetails",
+    name: "fetchTokenDetails", // Name used internally for the effect
     input: {
-      token: S.string,
+      token: S.string, // Input: token address as string
     },
     output: {
-      decimal: S.number,
+      decimal: S.number, // Output: decimal value for the token
     },
+    rateLimit: false, // Disable rate limiting for this effect
   },
-  async ({ input }) => {
-    const decimals = await client.readContract({
-      address: input.token as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: "decimals",
-    });
+  async ({ input, context }) => {
+    try {
+      // Call token.decimals() via RPC
+      const decimals = await client.readContract({
+        address: input.token as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "decimals",
+      });
 
-    console.log(`Token decimals: ${decimals}`);
-    return { decimal: decimals };
+      return { decimal: decimals };
+    } catch (err) {
+      // Log a warning instead of failing the entire event
+      context.log.warn(
+        `⚠️ Failed to fetch token decimals for ${input.token}: ${err}`
+      );
+
+      // Fallback: most tokens use 18 decimals
+      return { decimal: 18 };
+    }
   }
 );
 ```
@@ -63,9 +75,9 @@ const fetchTokenDetails = experimental_createEffect(
 
 Before running the indexer locally, make sure you have the following installed:
 
--   **[Node.js 18+](https://nodejs.org/en/download/)**
--   **[pnpm](https://pnpm.io/installation)**
--   **[Docker Desktop](https://www.docker.com/products/docker-desktop/)**
+- **[Node.js 18+](https://nodejs.org/en/download/)**
+- **[pnpm](https://pnpm.io/installation)**
+- **[Docker Desktop](https://www.docker.com/products/docker-desktop/)**
 
 ## Running the Indexer
 
