@@ -7,7 +7,7 @@ These calls run in parallel with your handler logic, so they don’t block execu
 
 You can learn more about the Effects API in the documentation: [https://docs.envio.dev/docs/HyperIndex/effect-api](https://docs.envio.dev/docs/HyperIndex/effect-api)
 
-The following example extends the **factory pattern** example to fetch the **decimal of a token** using an RPC call via **Viem**.
+The following example extends the **factory pattern** example to fetch the **decimal of a token** via an RPC call.
 
 ## Create Effect
 
@@ -36,13 +36,6 @@ CONTRACT.EVENT.handler(async ({ event, context }) => {
 The following effect fetches the **decimal of a token** using an RPC call:
 
 ```ts
-const client = createPublicClient({
-  chain: mainnet,
-  transport: http(process.env.ETHEREUM_MAINNET_RPC!),
-});
-
-const ERC20_ABI = parseAbi(["function decimals() view returns (uint8)"]);
-
 const fetchTokenDetails = experimental_createEffect(
   {
     name: "fetchTokenDetails",

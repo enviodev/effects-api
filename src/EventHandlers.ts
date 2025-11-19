@@ -1,72 +1,71 @@
-import { experimental_createEffect, S } from "envio";
-import { UniswapV3Factory, UniswapV3Pool } from "generated";
+import { createEffect, S } from "envio";
+import { UniswapV3Factory } from "generated";
 import { createPublicClient, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 
+// Create a Viem client for mainnet RPC reads
 const client = createPublicClient({
   chain: mainnet,
   transport: http(process.env.ETHEREUM_MAINNET_RPC!),
 });
 
+// Minimal ABI to fetch ERC20 decimals
 const ERC20_ABI = parseAbi(["function decimals() view returns (uint8)"]);
 
-const fetchTokenDetails = experimental_createEffect(
+// Effect to fetch token metadata (decimals)
+const fetchTokenDetails = createEffect(
   {
-    name: "fetchTokenDetails",
+    name: "fetchTokenDetails", // Name used internally for HyperIndex effect tracking
     input: {
-      token: S.string,
+      token: S.string, // Input: token address as string
     },
     output: {
-      decimal: S.number,
+      decimal: S.number, // Output: decimal value for the token
     },
+    rateLimit: false, // Disable rate limiting for this effect
   },
-  async ({ input }) => {
-    const decimals = await client.readContract({
-      address: input.token as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: "decimals",
-    });
+  async ({ input, context }) => {
+    try {
+      // Call token.decimals() via RPC
+      const decimals = await client.readContract({
+        address: input.token as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "decimals",
+      });
 
-    console.log(`Token decimals: ${decimals}`);
-    return { decimal: decimals };
-  },
+      return { decimal: decimals };
+    } catch (err) {
+      // Log a warning instead of failing the entire event
+      context.log.warn(
+        `⚠️ Failed to fetch token decimals for ${input.token}: ${err}`
+      );
+
+      // Fallback: most tokens use 18 decimals
+      return { decimal: 18 };
+    }
+  }
 );
 
+// Handle Uniswap V3 PoolCreated event
 UniswapV3Factory.PoolCreated.handler(async ({ event, context }) => {
-  const token0Details = await context.effect(fetchTokenDetails, {
-    token: event.params.token0,
-  });
+  // Run both token decimal fetches in parallel
+  const [token0Details, token1Details] = await Promise.all([
+    context.effect(fetchTokenDetails, { token: event.params.token0 }),
+    context.effect(fetchTokenDetails, { token: event.params.token1 }),
+  ]);
 
-  const token1Details = await context.effect(fetchTokenDetails, {
-    token: event.params.token1,
-  });
-
+  // Entity data for indexing
   const entity = {
-    id: `${event.chainId}_${event.params.pool}`,
-    token0: event.params.token0,
-    token0Decimals: token0Details.decimal,
-    token1: event.params.token1,
-    token1Decimals: token1Details.decimal,
-    fee: event.params.fee,
-    tickSpacing: event.params.tickSpacing,
-    pool: event.params.pool,
+    id: `${event.chainId}_${event.params.pool}`, // Unique ID (chain + pool address)
+    token0: event.params.token0, // Token0 address
+    token0Decimals: token0Details.decimal, // Fetched token0 decimals
+    token1: event.params.token1, // Token1 address
+    token1Decimals: token1Details.decimal, // Fetched token1 decimals
+    fee: event.params.fee, // Fee tier
+    tickSpacing: event.params.tickSpacing, // Pool tick spacing
+    pool: event.params.pool, // Pool address
   };
 
+  // Store entity in HyperIndex DB
   context.UniswapV3Factory_PoolCreated.set(entity);
-});
-
-UniswapV3Factory.PoolCreated.contractRegister(({ event, context }) => {
-  context.addUniswapV3Pool(event.params.pool);
-});
-
-UniswapV3Pool.Initialize.handler(async ({ event, context }) => {
-  const entity = {
-    id: `${event.chainId}_${event.srcAddress}`,
-    sqrtPriceX96: event.params.sqrtPriceX96,
-    tick: event.params.tick,
-    pool: event.srcAddress,
-    poolDetails: `${event.chainId}_${event.srcAddress}`,
-  };
-
-  context.UniswapV3Pool_Initialize.set(entity);
 });
