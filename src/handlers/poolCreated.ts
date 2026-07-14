@@ -1,5 +1,4 @@
-import { createEffect, S } from "envio";
-import { UniswapV3Factory } from "generated";
+import { createEffect, indexer, S } from "envio";
 import { createPublicClient, http, parseAbi } from "viem";
 import { mainnet } from "viem/chains";
 
@@ -47,25 +46,28 @@ const fetchTokenDetails = createEffect(
 );
 
 // Handle Uniswap V3 PoolCreated event
-UniswapV3Factory.PoolCreated.handler(async ({ event, context }) => {
-  // Run both token decimal fetches in parallel
-  const [token0Details, token1Details] = await Promise.all([
-    context.effect(fetchTokenDetails, { token: event.params.token0 }),
-    context.effect(fetchTokenDetails, { token: event.params.token1 }),
-  ]);
+indexer.onEvent(
+  { contract: "UniswapV3Factory", event: "PoolCreated" },
+  async ({ event, context }) => {
+    // Run both token decimal fetches in parallel
+    const [token0Details, token1Details] = await Promise.all([
+      context.effect(fetchTokenDetails, { token: event.params.token0 }),
+      context.effect(fetchTokenDetails, { token: event.params.token1 }),
+    ]);
 
-  // Entity data for indexing
-  const entity = {
-    id: `${event.chainId}_${event.params.pool}`, // Unique ID (chain + pool address)
-    token0: event.params.token0, // Token0 address
-    token0Decimals: token0Details.decimal, // Fetched token0 decimals
-    token1: event.params.token1, // Token1 address
-    token1Decimals: token1Details.decimal, // Fetched token1 decimals
-    fee: event.params.fee, // Fee tier
-    tickSpacing: event.params.tickSpacing, // Pool tick spacing
-    pool: event.params.pool, // Pool address
-  };
+    // Entity data for indexing
+    const entity = {
+      id: `${event.chainId}_${event.params.pool}`, // Unique ID (chain + pool address)
+      token0: event.params.token0, // Token0 address
+      token0Decimals: token0Details.decimal, // Fetched token0 decimals
+      token1: event.params.token1, // Token1 address
+      token1Decimals: token1Details.decimal, // Fetched token1 decimals
+      fee: event.params.fee, // Fee tier
+      tickSpacing: event.params.tickSpacing, // Pool tick spacing
+      pool: event.params.pool, // Pool address
+    };
 
-  // Store entity
-  context.UniswapV3Factory_PoolCreated.set(entity);
-});
+    // Store entity
+    context.UniswapV3Factory_PoolCreated.set(entity);
+  }
+);
