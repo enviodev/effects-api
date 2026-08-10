@@ -14,6 +14,7 @@ const ERC20_ABI = parseAbi(["function decimals() view returns (uint8)"]);
 // Effect to fetch token metadata (decimals)
 const fetchTokenDetails = createEffect(
   {
+    rateLimit: false,
     name: "fetchTokenDetails", // Name used internally for the effect
     input: {
       token: S.string, // Input: token address as string
